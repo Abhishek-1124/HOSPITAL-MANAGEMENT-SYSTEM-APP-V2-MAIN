@@ -1,0 +1,23 @@
+{
+  "name": "hospital_management_system_v2_23f2004693",
+  "version": "1.0.0",
+  "description": "A role-based Hospital Management System built with:",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.14.0",
+    "bootstrap": "^5.3.8",
+    "chart.js": "^4.5.1",
+    "pinia": "^2.3.1",
+    "puppeteer-core": "^24.40.0",
+    "vue": "^3.5.31",
+    "vue-demi": "^0.14.10",
+    "vue-router": "^4.6.4"
+  }
+}

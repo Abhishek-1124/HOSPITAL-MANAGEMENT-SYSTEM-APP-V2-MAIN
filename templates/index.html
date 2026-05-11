@@ -1,0 +1,1102 @@
+<!doctype html>
+{% raw %}
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hospital Management System V2</title>
+    <link href="/static/vendor/bootstrap.min.css?v=20260329" rel="stylesheet" />
+    <style>
+      :root {
+        --hms-bg-a: #e8f3ff;
+        --hms-bg-b: #f7fbff;
+        --hms-brand: #0b5ed7;
+        --hms-brand-dark: #0a3f92;
+        --hms-ink: #1e293b;
+        --hms-muted: #64748b;
+      }
+
+      body {
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 15% 10%, #d5ebff 0%, transparent 28%),
+          radial-gradient(circle at 88% 15%, #d9f5ff 0%, transparent 24%),
+          linear-gradient(145deg, var(--hms-bg-a), var(--hms-bg-b));
+        color: var(--hms-ink);
+      }
+
+      .top-shell {
+        backdrop-filter: blur(8px);
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid #dce8f8;
+        border-radius: 18px;
+        box-shadow: 0 20px 40px rgba(9, 43, 92, 0.08);
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #0b5ed7, #27a3ff);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .page-card {
+        background: #fff;
+        border: 1px solid #e3edf8;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(18, 58, 108, 0.08);
+      }
+
+      .kpi {
+        border-radius: 14px;
+        border: 1px solid #d9e7f7;
+        background: linear-gradient(135deg, #ffffff, #f2f8ff);
+      }
+
+      .section-title {
+        text-transform: uppercase;
+        font-size: 0.78rem;
+        letter-spacing: 0.09em;
+        color: var(--hms-muted);
+        font-weight: 700;
+      }
+
+      .hero-block {
+        background: linear-gradient(130deg, #0a3f92, #0b5ed7 45%, #22a6f8);
+        color: #fff;
+        border-radius: 20px;
+      }
+
+      .fade-in {
+        animation: fadeIn 0.4s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .router-link-active {
+        font-weight: 700;
+      }
+
+      .small-input {
+        max-width: 240px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="container py-4 py-lg-5"></div>
+
+    <script src="/static/vendor/vue.global.prod.js?v=20260329"></script>
+    <script src="/static/vendor/vue-router.global.prod.js?v=20260329"></script>
+    <script src="/static/vendor/vue-demi.iife.js?v=20260329"></script>
+    <script src="/static/vendor/pinia.iife.prod.js?v=20260329"></script>
+    <script src="/static/vendor/axios.min.js?v=20260329"></script>
+    <script src="/static/vendor/chart.umd.js?v=20260329"></script>
+
+    <script>
+      const { createApp, ref, reactive, computed, onMounted, watch, nextTick } =
+        Vue;
+      const { createRouter, createWebHistory } = VueRouter;
+      const { createPinia, defineStore } = Pinia;
+
+      const http = axios.create({
+        baseURL: "/",
+        timeout: 12000,
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const useAuthStore = defineStore("auth", {
+        state: () => ({
+          token: localStorage.getItem("hms_token") || "",
+          user: null,
+          booted: false,
+          alert: null,
+        }),
+        getters: {
+          isLoggedIn: (s) => !!s.token,
+        },
+        actions: {
+          setAlert(type, message) {
+            this.alert = { type, message, ts: Date.now() };
+          },
+          setToken(token) {
+            this.token = token;
+            if (token) localStorage.setItem("hms_token", token);
+            else localStorage.removeItem("hms_token");
+          },
+          async bootstrap() {
+            if (!this.token) {
+              this.booted = true;
+              return;
+            }
+            try {
+              const { data } = await http.get("/api/auth/me", {
+                headers: { Authorization: `Bearer ${this.token}` },
+              });
+              this.user = data.user;
+            } catch {
+              this.setToken("");
+              this.user = null;
+            } finally {
+              this.booted = true;
+            }
+          },
+          async login(payload) {
+            const { data } = await http.post("/api/auth/login", payload);
+            this.setToken(data.token);
+            this.user = data.user;
+            return data.user;
+          },
+          async register(payload) {
+            await http.post("/api/auth/register", payload);
+          },
+          logout() {
+            this.setToken("");
+            this.user = null;
+          },
+        },
+      });
+
+      function authHeaders(store) {
+        return store.token ? { Authorization: `Bearer ${store.token}` } : {};
+      }
+
+      const LandingView = {
+        template: `
+          <div class="fade-in">
+            <div class="hero-block p-4 p-lg-5 mb-4">
+              <div class="row align-items-center g-3">
+                <div class="col-lg-8">
+                  <h1 class="h3 h-lg-2 fw-bold mb-2">Hospital Management System V2</h1>
+                  <p class="mb-2 opacity-75">Vue + Router frontend, Flask REST APIs, SQLite persistence, Redis cache, and Celery jobs.</p>
+                  <div class="d-flex flex-wrap gap-2">
+                    <router-link class="btn btn-light btn-sm" to="/login">Login</router-link>
+                    <router-link class="btn btn-outline-light btn-sm" to="/register">Register as Patient</router-link>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <div class="bg-white text-dark rounded p-3">
+                    <div class="section-title">External API Integration</div>
+                    <div class="fw-semibold mt-2">Health Tip</div>
+                    <p class="mb-0 small">{{ tip }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="page-card p-4">
+              <div class="section-title">Stack Compliance Snapshot</div>
+              <div class="row g-2 mt-1">
+                <div class="col-md-4" v-for="item in stack" :key="item" >
+                  <div class="border rounded p-2 bg-light small">{{ item }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+        setup() {
+          const tip = ref("Loading health tip...");
+          const stack = [
+            "Vue.js + Vue Router",
+            "Pinia state management",
+            "Axios API communication",
+            "Flask token-based APIs",
+            "SQLite + SQLAlchemy",
+            "Redis caching",
+            "Celery worker + beat",
+            "Bootstrap responsive UI",
+            "Chart.js dashboard analytics",
+          ];
+
+          onMounted(async () => {
+            try {
+              const { data } = await http.get("/api/public/health-tip");
+              tip.value =
+                data.tip || "Stay hydrated and take regular checkups.";
+            } catch {
+              tip.value = "Stay hydrated and take regular checkups.";
+            }
+          });
+
+          return { tip, stack };
+        },
+      };
+
+      const LoginView = {
+        template: `
+          <div class="page-card p-4 mx-auto fade-in" style="max-width: 520px;">
+            <h2 class="h5 mb-3">Login</h2>
+            <div class="mb-3">
+              <label class="form-label">Username</label>
+              <input v-model.trim="form.username" class="form-control" required />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Password</label>
+              <input v-model="form.password" type="password" class="form-control" required />
+            </div>
+            <button class="btn btn-primary w-100" @click="submit">Sign In</button>
+            <div class="small text-secondary mt-3">Default admin: admin / admin123</div>
+          </div>
+        `,
+        setup() {
+          const store = useAuthStore();
+          const router = VueRouter.useRouter();
+          const form = reactive({ username: "", password: "" });
+
+          async function submit() {
+            if (!form.username || !form.password) {
+              store.setAlert("danger", "Username and password are required.");
+              return;
+            }
+            try {
+              const user = await store.login(form);
+              store.setAlert("success", "Login successful.");
+              if (user.role === "admin") router.push("/admin");
+              else if (user.role === "doctor") router.push("/doctor");
+              else router.push("/patient");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Login failed",
+              );
+            }
+          }
+
+          return { form, submit };
+        },
+      };
+
+      const RegisterView = {
+        template: `
+          <div class="page-card p-4 mx-auto fade-in" style="max-width: 760px;">
+            <h2 class="h5 mb-3">Patient Registration</h2>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Full Name</label>
+                <input v-model.trim="form.full_name" class="form-control" required />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Username</label>
+                <input v-model.trim="form.username" class="form-control" required />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Email</label>
+                <input v-model.trim="form.email" type="email" class="form-control" required />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Contact Number</label>
+                <input v-model.trim="form.contact_number" class="form-control" pattern="[0-9+\- ]{8,20}" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Password</label>
+                <input v-model="form.password" type="password" minlength="6" class="form-control" required />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Gender</label>
+                <select v-model="form.gender" class="form-select">
+                  <option value="">Select</option>
+                  <option>Male</option>
+                  <option>Female</option>
+                  <option>Other</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary mt-3" @click="submit">Create Account</button>
+          </div>
+        `,
+        setup() {
+          const store = useAuthStore();
+          const router = VueRouter.useRouter();
+          const form = reactive({
+            full_name: "",
+            username: "",
+            email: "",
+            contact_number: "",
+            password: "",
+            gender: "",
+          });
+
+          async function submit() {
+            if (
+              !form.full_name ||
+              !form.username ||
+              !form.email ||
+              !form.password
+            ) {
+              store.setAlert("danger", "Please fill all required fields.");
+              return;
+            }
+            try {
+              await store.register(form);
+              store.setAlert(
+                "success",
+                "Registration successful. Please login.",
+              );
+              router.push("/login");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Registration failed",
+              );
+            }
+          }
+
+          return { form, submit };
+        },
+      };
+
+      const AdminView = {
+        template: `
+          <div class="fade-in">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="kpi p-3"><div class="section-title">Doctors</div><div class="display-6">{{ dashboard.total_doctors || 0 }}</div></div>
+              </div>
+              <div class="col-md-4">
+                <div class="kpi p-3"><div class="section-title">Patients</div><div class="display-6">{{ dashboard.total_patients || 0 }}</div></div>
+              </div>
+              <div class="col-md-4">
+                <div class="kpi p-3"><div class="section-title">Appointments</div><div class="display-6">{{ dashboard.total_appointments || 0 }}</div></div>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+              <div class="col-lg-5">
+                <div class="page-card p-3 h-100">
+                  <h3 class="h6">Add Doctor (Admin CRUD)</h3>
+                  <div class="row g-2">
+                    <div class="col-12"><input class="form-control" v-model.trim="doctorForm.full_name" placeholder="Full name"/></div>
+                    <div class="col-6"><input class="form-control" v-model.trim="doctorForm.username" placeholder="Username"/></div>
+                    <div class="col-6"><input class="form-control" v-model.trim="doctorForm.email" placeholder="Email"/></div>
+                    <div class="col-6"><input class="form-control" v-model="doctorForm.password" type="password" placeholder="Password"/></div>
+                    <div class="col-6"><input class="form-control" v-model.trim="doctorForm.contact_number" placeholder="Contact"/></div>
+                    <div class="col-6">
+                      <select class="form-select" v-model="doctorForm.department_id">
+                        <option value="">Department</option>
+                        <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+                      </select>
+                    </div>
+                    <div class="col-6"><input class="form-control" v-model.trim="doctorForm.specialization" placeholder="Specialization"/></div>
+                  </div>
+                  <button class="btn btn-primary btn-sm mt-2" @click="createDoctor">Create Doctor</button>
+                </div>
+              </div>
+
+              <div class="col-lg-7">
+                <div class="page-card p-3 h-100">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="h6 mb-0">Appointments Status Chart</h3>
+                    <button class="btn btn-outline-secondary btn-sm" @click="load">Refresh</button>
+                  </div>
+                  <canvas ref="chartRef" height="130" class="mt-2"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+              <div class="col-lg-5">
+                <div class="page-card p-3 h-100">
+                  <h3 class="h6">Search</h3>
+                  <div class="d-flex gap-2">
+                    <select class="form-select small-input" v-model="searchType">
+                      <option value="all">All</option>
+                      <option value="doctor">Doctors</option>
+                      <option value="patient">Patients</option>
+                    </select>
+                    <input class="form-control" v-model.trim="searchQuery" placeholder="Name / specialization / contact"/>
+                    <button class="btn btn-primary btn-sm" @click="search">Go</button>
+                  </div>
+                  <div class="row mt-3">
+                    <div class="col-6">
+                      <div class="small fw-semibold">Doctors</div>
+                      <ul class="small ps-3 mb-0"><li v-for="d in searchResult.doctors" :key="d.doctor_id">{{ d.full_name }}</li></ul>
+                    </div>
+                    <div class="col-6">
+                      <div class="small fw-semibold">Patients</div>
+                      <ul class="small ps-3 mb-0"><li v-for="p in searchResult.patients" :key="p.id">{{ p.full_name }}</li></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-lg-7">
+                <div class="page-card p-3">
+                  <h3 class="h6">Doctors</h3>
+                  <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                      <thead><tr><th>Name</th><th>Specialization</th><th>Status</th><th></th></tr></thead>
+                      <tbody>
+                        <tr v-for="doc in doctors" :key="doc.doctor_id">
+                          <td>{{ doc.full_name }}</td>
+                          <td>{{ doc.specialization }}</td>
+                          <td>{{ doc.is_active ? "Active" : "Inactive" }}</td>
+                          <td><button class="btn btn-outline-danger btn-sm" @click="toggleActive(doc)">{{ doc.is_active ? "Blacklist" : "Enable" }}</button></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+        setup() {
+          const store = useAuthStore();
+          const chartRef = ref(null);
+          const dashboard = ref({});
+          const appointments = ref([]);
+          const doctors = ref([]);
+          const departments = ref([]);
+          const chartObj = ref(null);
+          const searchType = ref("all");
+          const searchQuery = ref("");
+          const searchResult = ref({ doctors: [], patients: [] });
+          const doctorForm = reactive({
+            full_name: "",
+            username: "",
+            email: "",
+            password: "",
+            contact_number: "",
+            specialization: "",
+            department_id: "",
+          });
+
+          function appointmentStatusData() {
+            const map = { Booked: 0, Completed: 0, Cancelled: 0 };
+            for (const a of appointments.value) {
+              map[a.status] = (map[a.status] || 0) + 1;
+            }
+            return map;
+          }
+
+          async function load() {
+            try {
+              const headers = { headers: authHeaders(store) };
+              const [d1, d2, d3, d4] = await Promise.all([
+                http.get("/api/admin/dashboard", headers),
+                http.get("/api/admin/doctors", headers),
+                http.get("/api/admin/appointments", headers),
+                http.get("/api/public/departments"),
+              ]);
+              dashboard.value = d1.data;
+              doctors.value = d2.data.doctors || [];
+              appointments.value = d3.data.appointments || [];
+              departments.value = d4.data.departments || [];
+
+              await nextTick();
+              const map = appointmentStatusData();
+              if (chartObj.value) chartObj.value.destroy();
+              chartObj.value = new Chart(chartRef.value, {
+                type: "bar",
+                data: {
+                  labels: Object.keys(map),
+                  datasets: [
+                    {
+                      label: "Appointments",
+                      data: Object.values(map),
+                      backgroundColor: ["#0d6efd", "#198754", "#dc3545"],
+                      borderRadius: 8,
+                    },
+                  ],
+                },
+                options: {
+                  responsive: true,
+                  plugins: { legend: { display: false } },
+                },
+              });
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Admin data load failed",
+              );
+            }
+          }
+
+          async function createDoctor() {
+            const needed = [
+              "full_name",
+              "username",
+              "email",
+              "password",
+              "specialization",
+              "department_id",
+            ];
+            for (const field of needed) {
+              if (!doctorForm[field]) {
+                store.setAlert("danger", `Missing required field: ${field}`);
+                return;
+              }
+            }
+            try {
+              await http.post("/api/admin/doctors", doctorForm, {
+                headers: authHeaders(store),
+              });
+              store.setAlert("success", "Doctor created");
+              await load();
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Doctor create failed",
+              );
+            }
+          }
+
+          async function toggleActive(doc) {
+            try {
+              await http.put(
+                `/api/admin/users/${doc.user_id}/active`,
+                { is_active: !doc.is_active },
+                { headers: authHeaders(store) },
+              );
+              await load();
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Status update failed",
+              );
+            }
+          }
+
+          async function search() {
+            if (!searchQuery.value) {
+              searchResult.value = { doctors: [], patients: [] };
+              return;
+            }
+            try {
+              const { data } = await http.get(
+                `/api/admin/search?q=${encodeURIComponent(searchQuery.value)}&type=${encodeURIComponent(searchType.value)}`,
+                { headers: authHeaders(store) },
+              );
+              searchResult.value = data;
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Search failed",
+              );
+            }
+          }
+
+          onMounted(load);
+          return {
+            dashboard,
+            doctors,
+            departments,
+            searchType,
+            searchQuery,
+            searchResult,
+            doctorForm,
+            chartRef,
+            load,
+            createDoctor,
+            toggleActive,
+            search,
+          };
+        },
+      };
+
+      const DoctorView = {
+        template: `
+          <div class="fade-in row g-3">
+            <div class="col-lg-4">
+              <div class="page-card p-3 h-100">
+                <h3 class="h6">Set Availability (7 Days)</h3>
+                <div class="mb-2"><input type="date" class="form-control" v-model="slot.date" /></div>
+                <div class="row g-2">
+                  <div class="col"><input type="time" class="form-control" v-model="slot.start_time" /></div>
+                  <div class="col"><input type="time" class="form-control" v-model="slot.end_time" /></div>
+                </div>
+                <button class="btn btn-primary btn-sm mt-2" @click="saveSlot">Save Slot</button>
+              </div>
+            </div>
+
+            <div class="col-lg-8">
+              <div class="page-card p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h3 class="h6 mb-0">Appointments</h3>
+                  <button class="btn btn-outline-secondary btn-sm" @click="load">Refresh</button>
+                </div>
+                <div class="table-responsive mt-2">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Patient</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      <tr v-for="a in appointments" :key="a.appointment_id">
+                        <td>{{ a.patient_name }}</td>
+                        <td>{{ formatDate(a.appointment_datetime) }}</td>
+                        <td>{{ a.status }}</td>
+                        <td class="d-flex gap-1">
+                          <button class="btn btn-success btn-sm" @click="setStatus(a.appointment_id, 'Completed')">Complete</button>
+                          <button class="btn btn-outline-danger btn-sm" @click="setStatus(a.appointment_id, 'Cancelled')">Cancel</button>
+                          <button class="btn btn-outline-primary btn-sm" @click="treatmentPrompt(a.appointment_id)" :disabled="a.status === 'Cancelled'">Treatment</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+        setup() {
+          const store = useAuthStore();
+          const appointments = ref([]);
+          const slot = reactive({ date: "", start_time: "", end_time: "" });
+
+          function formatDate(value) {
+            return new Date(value).toLocaleString();
+          }
+
+          async function load() {
+            try {
+              const { data } = await http.get("/api/doctor/appointments", {
+                headers: authHeaders(store),
+              });
+              appointments.value = data.appointments || [];
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Doctor data load failed",
+              );
+            }
+          }
+
+          async function saveSlot() {
+            if (!slot.date || !slot.start_time || !slot.end_time) {
+              store.setAlert("danger", "All slot fields are required");
+              return;
+            }
+            try {
+              await http.post(
+                "/api/doctor/availability",
+                { slots: [slot] },
+                { headers: authHeaders(store) },
+              );
+              store.setAlert("success", "Availability updated");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Availability update failed",
+              );
+            }
+          }
+
+          async function setStatus(id, status) {
+            try {
+              await http.put(
+                `/api/doctor/appointments/${id}/status`,
+                { status },
+                { headers: authHeaders(store) },
+              );
+              await load();
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Status update failed",
+              );
+            }
+          }
+
+          async function treatmentPrompt(id) {
+            const diagnosis = prompt("Diagnosis");
+            if (!diagnosis) return;
+            const prescription = prompt("Prescription (optional)") || "";
+            const notes = prompt("Notes (optional)") || "";
+            const next_visit_date =
+              prompt("Next visit date YYYY-MM-DD (optional)") || null;
+
+            try {
+              await http.put(
+                `/api/doctor/appointments/${id}/treatment`,
+                { diagnosis, prescription, notes, next_visit_date },
+                { headers: authHeaders(store) },
+              );
+              await load();
+              store.setAlert("success", "Treatment updated");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Treatment update failed",
+              );
+            }
+          }
+
+          onMounted(load);
+          return {
+            appointments,
+            slot,
+            formatDate,
+            load,
+            saveSlot,
+            setStatus,
+            treatmentPrompt,
+          };
+        },
+      };
+
+      const PatientView = {
+        template: `
+          <div class="fade-in row g-3">
+            <div class="col-lg-5">
+              <div class="page-card p-3 h-100">
+                <h3 class="h6">Book Appointment</h3>
+                <div class="mb-2">
+                  <label class="form-label small">Doctor</label>
+                  <select class="form-select" v-model="booking.doctor_id">
+                    <option value="">Select Doctor</option>
+                    <option v-for="d in doctors" :key="d.doctor_id" :value="d.doctor_id">{{ d.full_name }} - {{ d.specialization }}</option>
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small">Date/Time (YYYY-MM-DD HH:MM)</label>
+                  <input class="form-control" v-model.trim="booking.appointment_datetime" placeholder="2026-04-01 10:30" />
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small">Reason</label>
+                  <textarea class="form-control" v-model.trim="booking.reason"></textarea>
+                </div>
+                <button class="btn btn-primary btn-sm" @click="book">Book</button>
+
+                <hr />
+                <h3 class="h6">Profile</h3>
+                <div class="row g-2">
+                  <div class="col-12"><input class="form-control" v-model.trim="profile.full_name" placeholder="Full name" /></div>
+                  <div class="col-6"><input class="form-control" v-model.trim="profile.contact_number" placeholder="Contact" /></div>
+                  <div class="col-6"><input class="form-control" type="date" v-model="profile.date_of_birth" /></div>
+                  <div class="col-12"><input class="form-control" v-model.trim="profile.gender" placeholder="Gender" /></div>
+                  <div class="col-12"><textarea class="form-control" v-model.trim="profile.address" placeholder="Address"></textarea></div>
+                </div>
+                <button class="btn btn-outline-primary btn-sm mt-2" @click="updateProfile">Update Profile</button>
+
+                <hr />
+                <button class="btn btn-outline-secondary btn-sm" @click="startExport">Export Treatment CSV</button>
+                <div class="small mt-2" v-if="exportTask">
+                  Task {{ exportTask }}
+                  <button class="btn btn-link btn-sm" @click="checkExport">Check</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-7">
+              <div class="page-card p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h3 class="h6 mb-0">My Appointments</h3>
+                  <button class="btn btn-outline-secondary btn-sm" @click="load">Refresh</button>
+                </div>
+                <div class="table-responsive mt-2">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Doctor</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+                    <tbody>
+                      <tr v-for="a in appointments" :key="a.appointment_id">
+                        <td>{{ a.doctor_name }}</td>
+                        <td>{{ formatDate(a.appointment_datetime) }}</td>
+                        <td>{{ a.status }}</td>
+                        <td class="d-flex gap-1">
+                          <button class="btn btn-outline-warning btn-sm" @click="reschedule(a.appointment_id)" :disabled="a.status !== 'Booked'">Reschedule</button>
+                          <button class="btn btn-outline-danger btn-sm" @click="cancel(a.appointment_id)" :disabled="a.status !== 'Booked'">Cancel</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+        setup() {
+          const store = useAuthStore();
+          const doctors = ref([]);
+          const appointments = ref([]);
+          const exportTask = ref("");
+          const booking = reactive({
+            doctor_id: "",
+            appointment_datetime: "",
+            reason: "",
+          });
+          const profile = reactive({
+            full_name: "",
+            contact_number: "",
+            date_of_birth: "",
+            gender: "",
+            address: "",
+          });
+
+          function formatDate(value) {
+            return new Date(value).toLocaleString();
+          }
+
+          async function load() {
+            try {
+              const headers = { headers: authHeaders(store) };
+              const [d1, d2] = await Promise.all([
+                http.get("/api/patient/dashboard", headers),
+                http.get("/api/patient/appointments", headers),
+              ]);
+              const dashboard = d1.data;
+              doctors.value = (dashboard.doctors || []).filter(
+                (d) => dashboard.doctor_availability[String(d.doctor_id)],
+              );
+              appointments.value = d2.data.appointments || [];
+
+              profile.full_name = store.user?.full_name || "";
+              profile.contact_number = store.user?.contact_number || "";
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Patient data load failed",
+              );
+            }
+          }
+
+          async function book() {
+            if (!booking.doctor_id || !booking.appointment_datetime) {
+              store.setAlert("danger", "Doctor and date/time are required");
+              return;
+            }
+            try {
+              await http.post("/api/patient/appointments", booking, {
+                headers: authHeaders(store),
+              });
+              await load();
+              store.setAlert("success", "Appointment booked");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Booking failed",
+              );
+            }
+          }
+
+          async function cancel(id) {
+            try {
+              await http.put(
+                `/api/patient/appointments/${id}/cancel`,
+                {},
+                { headers: authHeaders(store) },
+              );
+              await load();
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Cancel failed",
+              );
+            }
+          }
+
+          async function reschedule(id) {
+            const appointment_datetime = prompt(
+              "New date/time (YYYY-MM-DD HH:MM)",
+            );
+            if (!appointment_datetime) return;
+            try {
+              await http.put(
+                `/api/patient/appointments/${id}/reschedule`,
+                { appointment_datetime },
+                { headers: authHeaders(store) },
+              );
+              await load();
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Reschedule failed",
+              );
+            }
+          }
+
+          async function updateProfile() {
+            try {
+              await http.put("/api/patient/profile", profile, {
+                headers: authHeaders(store),
+              });
+              const { data } = await http.get("/api/auth/me", {
+                headers: authHeaders(store),
+              });
+              store.user = data.user;
+              store.setAlert("success", "Profile updated");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Profile update failed",
+              );
+            }
+          }
+
+          async function startExport() {
+            try {
+              const { data } = await http.post(
+                "/api/patient/export/treatments",
+                {},
+                { headers: authHeaders(store) },
+              );
+              exportTask.value = data.task_id;
+              store.setAlert("success", "Export started");
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Export start failed",
+              );
+            }
+          }
+
+          async function checkExport() {
+            if (!exportTask.value) return;
+            try {
+              const { data } = await http.get(
+                `/api/patient/export/status/${exportTask.value}`,
+                { headers: authHeaders(store) },
+              );
+              if (data.state === "SUCCESS") {
+                store.setAlert(
+                  "success",
+                  `Export ready: ${data.result.file_path}`,
+                );
+              } else {
+                store.setAlert("info", `Task state: ${data.state}`);
+              }
+            } catch (error) {
+              store.setAlert(
+                "danger",
+                error.response?.data?.error || "Export status failed",
+              );
+            }
+          }
+
+          onMounted(load);
+          return {
+            doctors,
+            appointments,
+            booking,
+            profile,
+            exportTask,
+            formatDate,
+            load,
+            book,
+            cancel,
+            reschedule,
+            updateProfile,
+            startExport,
+            checkExport,
+          };
+        },
+      };
+
+      const routes = [
+        { path: "/", component: LandingView },
+        { path: "/login", component: LoginView },
+        { path: "/register", component: RegisterView },
+        { path: "/admin", component: AdminView, meta: { role: "admin" } },
+        { path: "/doctor", component: DoctorView, meta: { role: "doctor" } },
+        { path: "/patient", component: PatientView, meta: { role: "patient" } },
+      ];
+
+      const router = createRouter({
+        history: createWebHistory(),
+        routes,
+      });
+
+      const RootApp = {
+        template: `
+          <div>
+            <div class="top-shell p-3 p-lg-4 mb-4">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="brand-mark">H</span>
+                  <div>
+                    <div class="fw-bold">Hospital Management System</div>
+                    <div class="small text-secondary">MAD-2 Compliant Stack</div>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 small">
+                  <router-link class="btn btn-sm btn-outline-primary" to="/">Home</router-link>
+                  <router-link v-if="!store.user" class="btn btn-sm btn-outline-primary" to="/login">Login</router-link>
+                  <router-link v-if="!store.user" class="btn btn-sm btn-primary" to="/register">Register</router-link>
+                  <router-link v-if="store.user?.role === 'admin'" class="btn btn-sm btn-outline-primary" to="/admin">Admin</router-link>
+                  <router-link v-if="store.user?.role === 'doctor'" class="btn btn-sm btn-outline-primary" to="/doctor">Doctor</router-link>
+                  <router-link v-if="store.user?.role === 'patient'" class="btn btn-sm btn-outline-primary" to="/patient">Patient</router-link>
+                  <button v-if="store.user" class="btn btn-sm btn-outline-danger" @click="logout">Logout</button>
+                </div>
+              </div>
+              <div v-if="store.user" class="small text-secondary mt-2">Logged in as {{ store.user.full_name }} ({{ store.user.role }})</div>
+            </div>
+
+            <div v-if="store.alert" class="alert" :class="alertClass">
+              {{ store.alert.message }}
+            </div>
+
+            <router-view v-if="store.booted"></router-view>
+          </div>
+        `,
+        setup() {
+          const store = useAuthStore();
+          const router = VueRouter.useRouter();
+
+          const alertClass = computed(() => {
+            const t = store.alert?.type || "info";
+            if (t === "danger") return "alert-danger";
+            if (t === "success") return "alert-success";
+            if (t === "warning") return "alert-warning";
+            return "alert-info";
+          });
+
+          function logout() {
+            store.logout();
+            router.push("/login");
+          }
+
+          watch(
+            () => store.alert,
+            () => {
+              if (!store.alert) return;
+              setTimeout(() => {
+                if (store.alert && Date.now() - store.alert.ts > 2800)
+                  store.alert = null;
+              }, 3000);
+            },
+            { deep: true },
+          );
+
+          return { store, alertClass, logout };
+        },
+      };
+
+      const app = createApp(RootApp);
+      const pinia = createPinia();
+      app.use(pinia);
+
+      const auth = useAuthStore(pinia);
+
+      router.beforeEach(async (to, from, next) => {
+        if (!auth.booted) await auth.bootstrap();
+        if (to.meta.role) {
+          if (!auth.user) return next("/login");
+          if (auth.user.role !== to.meta.role) {
+            if (auth.user.role === "admin") return next("/admin");
+            if (auth.user.role === "doctor") return next("/doctor");
+            return next("/patient");
+          }
+        }
+        if ((to.path === "/login" || to.path === "/register") && auth.user) {
+          if (auth.user.role === "admin") return next("/admin");
+          if (auth.user.role === "doctor") return next("/doctor");
+          return next("/patient");
+        }
+        next();
+      });
+
+      app.use(router);
+      app.mount("#app");
+    </script>
+  </body>
+</html>
+{% endraw %}
